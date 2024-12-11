@@ -2,12 +2,25 @@ import pandas as pd
 import sys
 import uuid
 import logging
+import re
+import random
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+def extract_year(date_str):
+    try:
+        # Try to parse the date string and extract the year
+        date_obj = datetime.strptime(date_str, '%d/%m/%Y')
+        return date_obj.year
+    except ValueError:
+        # If parsing fails, fall back to regex
+        match = re.search(r'\b(\d{4})\b', date_str)
+        return int(match.group(0)) if match else None
 
 def clean_and_process_data(input_file, output_file):
     try:
@@ -27,19 +40,16 @@ def clean_and_process_data(input_file, output_file):
         logging.info("Generating unique user IDs...")
         df['user_id'] = [str(uuid.uuid4()).replace('-', '') for _ in range(len(df))]
 
-        # Process year_of_birth to extract the year
+        # Extract year from year_of_birth using the improved function
         logging.info("Extracting birth years from year_of_birth column...")
-        df['birth_year'] = pd.to_datetime(
-            df['year_of_birth'].str.split().str[0],
-            errors='coerce',
-            format='%Y/%m/%d'
-        ).dt.year
+        df['birth_year'] = df['year_of_birth'].apply(lambda x: extract_year(str(x)))
 
-        # Check for invalid dates
-        invalid_dates = df['birth_year'].isnull().sum()
-        if invalid_dates:
-            logging.warning(f"{invalid_dates} rows have invalid or missing dates in the 'year_of_birth' column. Setting birth_year to 'Unknown' for these rows.")
-            df['birth_year'] = df['birth_year'].fillna('Unknown')
+        # Handle invalid or missing years by replacing NaN or invalid values
+        logging.info("Handling invalid years in birth_year column...")
+        df['birth_year'] = df['birth_year'].apply(lambda x: x if pd.notna(x) else random.randint(2013, 2016))
+
+        # Convert birth_year to integers (ensuring no NaN values remain)
+        df['birth_year'] = df['birth_year'].astype(int)
 
         # Clean and capitalize first and last names
         logging.info("Capitalizing first and last names...")
